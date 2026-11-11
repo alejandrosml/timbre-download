@@ -33,6 +33,10 @@ jobs:
         run: |
           case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "not a release tag: $TAG"; exit 1 ;; esac
           VERSION="${TAG#v}"
+          # Publishing an older version would remove the newer one: refuse.
+          NEWEST="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq '.[] | select(.draft | not) | .tag_name' | sort -V | tail -n 1)"
+          [ "$NEWEST" = "$TAG" ] || { echo "::error::$NEWEST is published here and is newer than $TAG"; exit 1; }
           mkdir files
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir files
           ls -l files
@@ -44,7 +48,8 @@ jobs:
       - name: List it in the MCP Registry
         run: |
           VERSION="${TAG#v}"
-          if curl -fsS -o /dev/null "https://registry.modelcontextprotocol.io/v0/servers/io.github.alejandrosml%2Ftimbre/versions/$VERSION"; then
+          # A version can be listed once, hidden ones included.
+          if curl -fsS -o /dev/null "https://registry.modelcontextprotocol.io/v0/servers/io.github.alejandrosml%2Ftimbre/versions/$VERSION?include_deleted=true"; then
             echo "::notice::$NAME $VERSION is already in the registry: nothing to list."
             exit 0
           fi
@@ -62,9 +67,10 @@ jobs:
           "$RUNNER_TEMP/mcp-publisher" publish
       - name: Remove the earlier versions here
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name' | while read -r old; do
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq '.[] | select(.draft | not) | .tag_name' | while read -r old; do
             if [ "$old" != "$TAG" ]; then
               echo "removing $old"
-              gh release delete "$old" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+              gh release delete "$old" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag < /dev/null
             fi
           done
