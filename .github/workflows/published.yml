@@ -1,0 +1,70 @@
+# When a version is published here: check its files, list it in the official
+# MCP Registry (registry.modelcontextprotocol.io), then remove the versions
+# that came before. This repository holds the latest version only.
+#
+# GitHub's OIDC token proves the repository is alejandrosml's, so the name
+# io.github.alejandrosml/timbre needs no secret.
+name: Published
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # removes the earlier releases and their tags
+      id-token: write # proves to the registry whose repository this is
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+      NAME: io.github.alejandrosml/timbre
+      # mcp-publisher v1.8.9, linux/amd64, as in the release's checksums file.
+      PUBLISHER_URL: https://github.com/modelcontextprotocol/registry/releases/download/v1.8.9/mcp-publisher_linux_amd64.tar.gz
+      PUBLISHER_SHA256: 4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The release's files
+        run: |
+          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "not a release tag: $TAG"; exit 1 ;; esac
+          VERSION="${TAG#v}"
+          mkdir files
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir files
+          ls -l files
+          for f in "timbre-$VERSION.mcpb" "Timbre-$VERSION.zip" timbre-mail-skill.zip; do
+            [ -f "files/$f" ] || { echo "::error::the release has no $f"; exit 1; }
+          done
+          # Both kinds of Mac, or nothing is listed.
+          python3 -I scripts/check-universal.py "files/timbre-$VERSION.mcpb" "files/Timbre-$VERSION.zip"
+      - name: List it in the MCP Registry
+        run: |
+          VERSION="${TAG#v}"
+          if curl -fsS -o /dev/null "https://registry.modelcontextprotocol.io/v0/servers/io.github.alejandrosml%2Ftimbre/versions/$VERSION"; then
+            echo "::notice::$NAME $VERSION is already in the registry: nothing to list."
+            exit 0
+          fi
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/timbre-${VERSION}.mcpb"
+          SHA="$(sha256sum "files/timbre-$VERSION.mcpb" | cut -d' ' -f1)"
+          jq --arg v "$VERSION" --arg u "$URL" --arg s "$SHA" \
+            '.version = $v | .packages[0].identifier = $u | .packages[0].fileSha256 = $s' \
+            server.json > "$RUNNER_TEMP/server.json"
+          mv "$RUNNER_TEMP/server.json" server.json
+          cat server.json
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/publisher.tgz" "$PUBLISHER_URL"
+          echo "$PUBLISHER_SHA256  $RUNNER_TEMP/publisher.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/publisher.tgz" -C "$RUNNER_TEMP" mcp-publisher
+          "$RUNNER_TEMP/mcp-publisher" login github-oidc
+          "$RUNNER_TEMP/mcp-publisher" publish
+      - name: Remove the earlier versions here
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name' | while read -r old; do
+            if [ "$old" != "$TAG" ]; then
+              echo "removing $old"
+              gh release delete "$old" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+            fi
+          done
