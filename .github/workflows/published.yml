@@ -1,6 +1,7 @@
-# When a version is published here: check its files, list it in the official
-# MCP Registry (registry.modelcontextprotocol.io), then remove the versions
-# that came before. This repository holds the latest version only.
+# When a version is published here: check its files (the archive of its
+# source code among them), list it in the official MCP Registry
+# (registry.modelcontextprotocol.io), then remove the versions that came
+# before. This repository holds the latest version only.
 #
 # GitHub's OIDC token proves the repository is alejandrosml's, so the name
 # io.github.alejandrosml/timbre needs no secret.
@@ -40,11 +41,20 @@ jobs:
           mkdir files
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir files
           ls -l files
-          for f in "timbre-$VERSION.mcpb" "Timbre-$VERSION.zip" timbre-mail-skill.zip; do
+          SOURCE="timbre-$VERSION-source.zip"
+          for f in "timbre-$VERSION.mcpb" "Timbre-$VERSION.zip" timbre-mail-skill.zip "$SOURCE"; do
             [ -f "files/$f" ] || { echo "::error::the release has no $f"; exit 1; }
           done
           # Both kinds of Mac, or nothing is listed.
           python3 -I scripts/check-universal.py "files/timbre-$VERSION.mcpb" "files/Timbre-$VERSION.zip"
+          # Timbre is open source by its versions: the source of this one,
+          # with its licence, or nothing is listed.
+          unzip -q "files/$SOURCE" "timbre-$VERSION/LICENSE" "timbre-$VERSION/Cargo.toml" -d "$RUNNER_TEMP/source" \
+            || { echo "::error::$SOURCE has no licence or no Cargo.toml"; exit 1; }
+          grep -q "MIT License" "$RUNNER_TEMP/source/timbre-$VERSION/LICENSE" \
+            || { echo "::error::$SOURCE has no MIT licence"; exit 1; }
+          grep -qx "version = \"$VERSION\"" "$RUNNER_TEMP/source/timbre-$VERSION/Cargo.toml" \
+            || { echo "::error::$SOURCE is not the source of $VERSION"; exit 1; }
       - name: List it in the MCP Registry
         run: |
           VERSION="${TAG#v}"
