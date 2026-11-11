@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.alejandrosml/timbre",
+  "title": "Timbre",
+  "description": "Apple Mail on macOS for all LLMs (Claude, ChatGPT, Gemini, Mistral): local, safe, and undoable.",
+  "websiteUrl": "https://alejandrosml.github.io/timbre/",
+  "version": "0.0.0",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/alejandrosml/timbre-download/releases/download/v0.0.0/timbre-0.0.0.mcpb",
+      "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
