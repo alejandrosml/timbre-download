@@ -1,5 +1,6 @@
-# When a version is published here: check its files (the archive of its
-# source code among them), list it in the official MCP Registry
+# When a version is published here: check its files (the signed, notarized
+# app and the archive of its source code among them), list it in the
+# official MCP Registry
 # (registry.modelcontextprotocol.io), then remove the versions that came
 # before. This repository holds the latest version only.
 #
@@ -47,6 +48,18 @@ jobs:
           done
           # Both kinds of Mac, or nothing is listed.
           python3 -I scripts/check-universal.py "files/timbre-$VERSION.mcpb" "files/Timbre-$VERSION.zip"
+          # The app the installed Timbres take, and the one Claude installs:
+          # signed with Timbre's Developer ID, notarized (ticket stapled),
+          # Timbre's identifier, this version. The Release workflow's dry run
+          # makes an app signed ad hoc: listed by mistake, it would reach the
+          # registry, and the page would refuse it. A copy of
+          # scripts/check-release-app.py from Timbre's own repository: keep
+          # the two the same.
+          python3 -I scripts/check-release-app.py "$VERSION" "files/timbre-$VERSION.mcpb" "files/Timbre-$VERSION.zip"
+          # The checksums the release gives are those of its files.
+          [ -f files/SHA256SUMS ] || { echo "::error::the release has no SHA256SUMS"; exit 1; }
+          (cd files && sha256sum --check --strict SHA256SUMS) \
+            || { echo "::error::SHA256SUMS does not match the release's files"; exit 1; }
           # Timbre is open source by its versions: the source of this one,
           # with its licence, or nothing is listed.
           unzip -q "files/$SOURCE" "timbre-$VERSION/LICENSE" "timbre-$VERSION/Cargo.toml" -d "$RUNNER_TEMP/source" \
