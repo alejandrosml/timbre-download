@@ -1,0 +1,8 @@
+{
+  "name": "timbre-download-mcpb",
+  "private": true,
+  "description": "The packer of Timbre's Claude extension (mcpb), its whole tree pinned by package-lock.json: installed with npm ci --ignore-scripts by the Daily workflow.",
+  "dependencies": {
+    "@anthropic-ai/mcpb": "2.1.2"
+  }
+}
