@@ -1,10 +1,13 @@
-# The only workflow of this repository: once a day, at 20:07, Paris time.
-# Every job but cleanup (which only removes this run's artifacts) refuses to
-# run outside 20:07-21:29, Paris time: never re-run it by hand; the next
-# evening takes the step again.
+# The only workflow of this repository, scheduled once a day, at 20:07,
+# Paris time. GitHub starts scheduled workflows late, often hours late (6 to
+# 9 hours in November 2026), and skips some: the hour of a run is GitHub's,
+# not the maintainer's, and the next day's run takes what a run did not do.
+# A run re-run by hand would start at the hour of the click: every job but
+# cleanup (which only removes this run's artifacts) refuses a run that
+# GitHub's schedule did not start, or a second attempt. Never re-run it.
 #
 # A version of Timbre is prepared as a draft release vX.Y.Z, in two steps,
-# and each evening takes the step that is due:
+# and each day's run takes the step that is due:
 #
 # 1. The draft holds timbre-X.Y.Z-build.zip, made on the maintainer's Mac by
 #    the Release workflow of Timbre's own repository: Timbre.app (signed ad
@@ -23,9 +26,10 @@
 # npm packages, mcp-publisher) runs in jobs whose token cannot write to this
 # repository (mcp-publisher also gets the OIDC token the registry asks for).
 # They get their files from the jobs that can, as artifacts of the run,
-# dated 20:07 and removed at its end, whatever happened.
+# dated of the latest 20:07 (scripts/redate.py) and removed at its end,
+# whatever happened.
 #
-# Every evening, the version published here is then listed in the official
+# At each run, the version published here is then listed in the official
 # MCP Registry (registry.modelcontextprotocol.io), the other versions are
 # hidden there, and the releases that came before are removed: this
 # repository holds the latest version only. GitHub's OIDC token proves the
@@ -48,10 +52,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EVENING: |
-    now="$(TZ=Europe/Paris date +%H%M)"
-    if [ "$now" -lt 2007 ] || [ "$now" -gt 2129 ]; then
-      echo "::error::Daily runs between 20:07 and 21:29, Paris time, only (it is $now). Never re-run it by hand: the next evening takes the step again."
+  ONCE: |
+    if [ "$GITHUB_EVENT_NAME" != schedule ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ]; then
+      echo "::error::Daily runs when GitHub's schedule starts it, once (this is attempt $GITHUB_RUN_ATTEMPT of a $GITHUB_EVENT_NAME run). Never re-run it by hand: the next day's run takes the step again."
       exit 1
     fi
 
@@ -71,8 +74,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: In the evening only
-        run: eval "$EVENING"
+      - name: Started by the schedule, once
+        run: eval "$ONCE"
       - name: Keep the schedule alive
         # GitHub turns a public repository's schedules off after 60 days
         # without activity; enabling the workflow again starts that count
@@ -109,7 +112,7 @@ jobs:
             echo "Draft $tag: ${names//$'\n'/ }"
             has() { grep -qxF "$1" <<<"$names"; }
             # The package's presence marks the first step as done; the
-            # signed package, or SHA256SUMS left by an evening that stopped
+            # signed package, or SHA256SUMS left by a run that stopped
             # half-way, the second as due.
             if has "timbre-$version-signed.mcpb" || has SHA256SUMS; then
               step=finish
@@ -136,8 +139,8 @@ jobs:
       VERSION: ${{ needs.plan.outputs.version }}
       RELEASE_ID: ${{ needs.plan.outputs.release_id }}
     steps:
-      - name: In the evening only
-        run: eval "$EVENING"
+      - name: Started by the schedule, once
+        run: eval "$ONCE"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -145,7 +148,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/draft.sh get "timbre-$VERSION-build.zip" "$RUNNER_TEMP/build.zip"
-      - name: Its two files, dated 20:07
+      - name: Its two files, dated of the latest 20:07
         run: |
           set -euo pipefail
           # The artifacts of a run can be downloaded by anyone signed in to
@@ -176,8 +179,8 @@ jobs:
     env:
       VERSION: ${{ needs.plan.outputs.version }}
     steps:
-      - name: In the evening only
-        run: eval "$EVENING"
+      - name: Started by the schedule, once
+        run: eval "$ONCE"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build
@@ -207,8 +210,8 @@ jobs:
     env:
       VERSION: ${{ needs.plan.outputs.version }}
     steps:
-      - name: In the evening only
-        run: eval "$EVENING"
+      - name: Started by the schedule, once
+        run: eval "$ONCE"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -244,8 +247,9 @@ jobs:
           PATH="$RUNNER_TEMP/mcpb/node_modules/.bin:$PATH"
           SRC="$RUNNER_TEMP/timbre-$VERSION"
           "$SRC/scripts/package-mcpb.sh" "$RUNNER_TEMP/app/Timbre.app"
-          # Handed over dated 20:07, as every artifact of the run (mcpb dates
-          # the files of the hour of packing); store checks it all the same.
+          # Handed over dated of the latest 20:07, as every artifact of the
+          # run (mcpb dates the files of the hour of packing); store checks it
+          # all the same.
           mkdir -p "$RUNNER_TEMP/package"
           python3 -I scripts/redate.py zip "$SRC/dist/timbre-$VERSION.mcpb" "$RUNNER_TEMP/package/timbre-$VERSION.mcpb"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -267,8 +271,8 @@ jobs:
       VERSION: ${{ needs.plan.outputs.version }}
       RELEASE_ID: ${{ needs.plan.outputs.release_id }}
     steps:
-      - name: In the evening only
-        run: eval "$EVENING"
+      - name: Started by the schedule, once
+        run: eval "$ONCE"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -311,13 +315,13 @@ jobs:
               assert mode & 0o111, oct(mode)
           print(len(got), "files, as built")
           PY
-      - name: Dated 20:07, the source, then the package, in the draft
+      - name: Dated of the latest 20:07, the source, then the package, in the draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Inside both, every file is dated this evening at 20:07, Paris
-          # time (mcpb dates them of the hour of packing, git archive of the
+          # Inside both, every file is dated of the latest 20:07, Paris time
+          # (mcpb dates them of the hour of packing, git archive of the
           # commit's). The package last: its presence marks this step done.
           mkdir "$RUNNER_TEMP/out"
           python3 -I scripts/redate.py zip "$RUNNER_TEMP/build/timbre-$VERSION-source.zip" "$RUNNER_TEMP/out/timbre-$VERSION-source.zip"
@@ -364,8 +368,8 @@ jobs:
       VERSION: ${{ needs.plan.outputs.version }}
       RELEASE_ID: ${{ needs.plan.outputs.release_id }}
     steps:
-      - name: In the evening only
-        run: eval "$EVENING"
+      - name: Started by the schedule, once
+        run: eval "$ONCE"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -375,7 +379,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/out"
-          # The package Timbre Signer made, or, after an evening that
+          # The package Timbre Signer made, or, after a run that
           # stopped half-way, the signed copy already under its final name
           # (an ad hoc one is refused below).
           if scripts/draft.sh names | grep -qxF "timbre-$VERSION-signed.mcpb"; then
@@ -411,13 +415,13 @@ jobs:
         run: |
           set -euo pipefail
           # Each file goes in place of the file of its name, uploaded now by
-          # this run; the source archive, left by the first evening, stays
+          # this run; the source archive, left by the first step, stays
           # (taking it out first would leave the draft without it).
           for f in SHA256SUMS "Timbre-$VERSION.zip" timbre-mail-skill.zip "timbre-$VERSION.mcpb"; do
             scripts/draft.sh put "$RUNNER_TEMP/out/$f"
           done
           # Then nothing else: the signed package under Timbre Signer's
-          # name, or anything an earlier evening left.
+          # name, or anything an earlier run left.
           scripts/draft.sh names | while read -r name; do
             [ -f "$RUNNER_TEMP/out/$name" ] || scripts/draft.sh rm "$name"
           done
@@ -446,8 +450,8 @@ jobs:
       PUBLISHER_URL: https://github.com/modelcontextprotocol/registry/releases/download/v1.8.9/mcp-publisher_linux_amd64.tar.gz
       PUBLISHER_SHA256: 4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8
     steps:
-      - name: In the evening only
-        run: eval "$EVENING"
+      - name: Started by the schedule, once
+        run: eval "$ONCE"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -559,8 +563,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: In the evening only
-        run: eval "$EVENING"
+      - name: Started by the schedule, once
+        run: eval "$ONCE"
       - name: Remove the earlier releases
         run: |
           set -euo pipefail

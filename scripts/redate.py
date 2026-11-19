@@ -1,9 +1,11 @@
-"""Dates every entry of a zip or tar archive of this evening at 20:07, Paris
-time, keeping everything else: names and their order, contents, modes, a
-zip's comment (a source archive names its commit there). The files of a
-version show then no hour of the work that made them: git archive dates
-them of the commit, mcpb of the hour of packing, the maintainer's Mac of
-the build. Used by the Daily workflow.
+"""Dates every entry of a zip or tar archive of the latest 20:07, Paris time
+(this evening's, or yesterday's before 20:07), keeping everything else:
+names and their order, contents, modes, a zip's comment (a source archive
+names its commit there). The files of a version show then no hour of the
+work that made them: git archive dates them of the commit, mcpb of the hour
+of packing, the maintainer's Mac of the build. Used by the Daily workflow,
+which GitHub starts at 20:07 or later, hours later at times: never a date
+to come.
 
 Usage: python3 -I scripts/redate.py zip|tar <in> <out>
 """
@@ -14,7 +16,10 @@ import tarfile
 import zipfile
 import zoneinfo
 
-EVENING = datetime.datetime.now(zoneinfo.ZoneInfo("Europe/Paris")).replace(hour=20, minute=7, second=0, microsecond=0)
+NOW = datetime.datetime.now(zoneinfo.ZoneInfo("Europe/Paris"))
+EVENING = NOW.replace(hour=20, minute=7, second=0, microsecond=0)
+if EVENING > NOW:
+    EVENING = (NOW - datetime.timedelta(days=1)).replace(hour=20, minute=7, second=0, microsecond=0)
 STAMP = int(EVENING.timestamp())
 
 
